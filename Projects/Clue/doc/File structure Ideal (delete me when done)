@@ -1,0 +1,41 @@
+# clue-ai/
+# │
+# ├── src/
+# │   ├── engine/
+# │   │   ├── cards.py
+# │   │   ├── deck.py
+# │   │   ├── game_state.py
+# │   │   ├── suggestion.py
+# │   │   ├── accusation.py
+# │   │   └── rules.py
+# │   │
+# │   ├── players/
+# │   │   ├── base_player.py
+# │   │   ├── human_player.py
+# │   │   └── bot_player.py
+# │   │
+# │   ├── ai/
+# │   │   ├── knowledge_base.py
+# │   │   ├── constraint_solver.py
+# │   │   ├── probability_model.py
+# │   │   └── strategy.py
+# │   │
+# │   ├── ui/
+# │   │   ├── cli.py
+# │   │   └── gui.py   (optional)
+# │   │
+# │   └── main.py
+# │
+# ├── tests/
+# │   ├── test_engine.py
+# │   ├── test_ai.py
+# │   ├── test_players.py
+# │   └── test_integration.py
+# │
+# ├── docs/
+# │   ├── architecture.md
+# │   ├── knowledge_matrix_diagram.png
+# │   └── reasoning_examples.md
+# │
+# ├── README.md
+# └── requirements.txt

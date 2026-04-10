@@ -1,0 +1,6 @@
+from cards import *
+
+__all__ = [
+    "SUSPECTS", "WEAPONS", "ROOMS", "ALL_CARDS", "CARD_TYPE",
+    "ROOM_ADJACENCY", "SECRET_PASSAGES", "SUSPECT_COLORS", "WEAPON_ICONS",
+]

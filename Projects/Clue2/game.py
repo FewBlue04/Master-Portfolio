@@ -359,6 +359,9 @@ class GameEngine:
     def get_player_rooms(self):
         return {name: p.current_room for name, p in self.players.items()}
 
+    def get_player_cards(self):
+        return {name: list(player.cards) for name, player in self.players.items()}
+
     def get_bot_knowledge(self, bot_name):
         """Get bot's KB notebook for display."""
         bot = self.players.get(bot_name)

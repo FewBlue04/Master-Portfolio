@@ -197,7 +197,7 @@ class GameEngine:
                 self.state_tracker.record_no_show(responder_name, asker_name, suspect, weapon, room)
             else:
                 # Can show — handle human/bot differently
-                if responder_name == self.human_name:
+                if responder.is_human:
                     # Need UI to ask human what to show
                     self.awaiting_human_show = True
                     self.pending_responder_index = idx
@@ -215,9 +215,11 @@ class GameEngine:
                         card = responder.pick_card_to_show(suspect, weapon, room, asker_name)
 
                     self._notify_show(responder_name, asker_name, card, suspect, weapon, room)
+                    asker_player = self.players.get(asker_name)
+                    visible_card = card if asker_player and asker_player.is_human else None
                     # record show in tracker (card may be None for others)
-                    self.state_tracker.record_show(responder_name, asker_name, card if asker_name == self.human_name else None)
-                    return {"type": "shown", "shower": responder_name, "asker": asker_name, "card": card if asker_name == self.human_name else None}
+                    self.state_tracker.record_show(responder_name, asker_name, visible_card)
+                    return {"type": "shown", "shower": responder_name, "asker": asker_name, "card": visible_card}
 
         # Nobody could show
         self._log(f"   🚨 Nobody could refute the suggestion!", "alert")
@@ -247,7 +249,8 @@ class GameEngine:
 
     def _notify_show(self, shower, asker, card, suspect, weapon, room):
         """Distribute show event to appropriate bots."""
-        if asker == self.human_name:
+        asker_player = self.players.get(asker)
+        if asker_player and asker_player.is_human:
             self._log(f"   ✅ {shower} shows you: {card}", "reveal")
         else:
             self._log(f"   ✅ {shower} shows {asker} a card (unknown to you).", "reveal")

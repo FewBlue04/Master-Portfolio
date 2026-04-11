@@ -7,7 +7,7 @@ lexicographic tie-breaking. No probability or randomness is used.
 
 from __future__ import annotations
 
-from engine.cards import SUSPECTS, WEAPONS
+from engine.cards import ROOMS, ROOM_ADJACENCY, SECRET_PASSAGES, SUSPECTS, WEAPONS
 from engine.knowledge_base import ContradictionError, KnowledgeBase
 
 
@@ -24,9 +24,23 @@ class ClueBot:
         suspect, weapon, room = self.choose_best_move(current_room, responder_order)
         return ("suggest", suspect, weapon, room)
 
+    def get_reachable_rooms(self, position):
+        if not position or position not in ROOM_ADJACENCY:
+            return sorted(ROOMS)
+
+        reachable = {position}
+        reachable.update(ROOM_ADJACENCY.get(position, []))
+
+        secret_room = SECRET_PASSAGES.get(position)
+        if secret_room:
+            reachable.add(secret_room)
+
+        return sorted(reachable)
+
     def get_legal_suggestions(self, position):
         suggestions = [
-            (suspect, weapon, position)
+            (suspect, weapon, room)
+            for room in self.get_reachable_rooms(position)
             for suspect in sorted(SUSPECTS)
             for weapon in sorted(WEAPONS)
         ]

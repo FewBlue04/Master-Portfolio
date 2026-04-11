@@ -281,6 +281,8 @@ class GameEngine:
             "accusation"
         )
 
+        self.state_tracker.record_accusation(accuser_name, suspect, weapon, room, correct)
+
         if correct:
             self._log(f"🏆 {accuser_name} is CORRECT! Game over!", "win")
             self.game_over = True

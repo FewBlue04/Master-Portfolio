@@ -49,6 +49,50 @@ The repo already contains pieces of the target system, but it does not yet satis
 
 The implementation will center around two primary modules.
 
+### Architecture Overview
+
+```mermaid
+graph TD
+    A[UI - ClueApp] --> B[GameEngine]
+    B --> C[GameStateTracker]
+    B --> D[Player/BotPlayer]
+    D --> E[ClueBot]
+    E --> F[KnowledgeBase]
+    F --> G[Constraint Propagation]
+    
+    B --> H[Event Log]
+    H --> A
+    
+    E --> I[Move Evaluation]
+    I --> J[One-Step Simulation]
+    J --> F
+    
+    subgraph "Core Engine"
+        B
+        C
+        H
+    end
+    
+    subgraph "Bot Intelligence"
+        E
+        F
+        G
+        I
+        J
+    end
+    
+    subgraph "User Interface"
+        A
+    end
+```
+
+### Data Flow
+
+1. **Game Flow**: UI → GameEngine → Players → UI (via event log)
+2. **Bot Decisions**: ClueBot → KnowledgeBase → Constraint Propagation → Move Evaluation
+3. **Observations**: GameEngine → GameStateTracker → ClueBot (for history)
+4. **Simulations**: ClueBot clones KnowledgeBase → evaluates outcomes → selects best move
+
 ### 1. KnowledgeBase
 
 The `KnowledgeBase` is the source of truth for all logical facts and unresolved possibilities.

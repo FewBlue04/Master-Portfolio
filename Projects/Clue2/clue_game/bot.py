@@ -1,26 +1,52 @@
 """
-Deterministic Clue bot.
+Deterministic Clue bot — one-step lookahead policy with constraint reduction.
 
-Move choice is based on one-step constraint-reduction simulation with fixed
-lexicographic tie-breaking. No probability or randomness is used.
+Implements a deterministic AI that evaluates moves by simulating constraint
+reduction outcomes. Uses fixed lexicographic tie-breaking and no randomness.
+Depends on KnowledgeBase for deductions and GameStateTracker for history.
 """
 
 from __future__ import annotations
 
 from collections import deque
+from typing import Dict, List, Optional, Tuple, Union
 
 from .cards import ROOM_ADJACENCY, ROOMS, SECRET_PASSAGES, SUSPECTS, WEAPONS
 from .knowledge_base import ContradictionError, KnowledgeBase
 
 
 class ClueBot:
-    """One-step lookahead policy: scores legal suggestions by constraint reduction."""
+    """Deterministic bot with one-step lookahead policy based on constraint reduction.
+    
+    Evaluates legal suggestions by simulating all possible response outcomes and
+    scoring them by the reduction in knowledge uncertainty. Uses fixed lexicographic
+    tie-breaking and incorporates information pressure and repeat penalties.
+    
+    Args:
+        name: Bot display name
+        kb: KnowledgeBase instance for deductions
+        
+    Attributes:
+        name: Bot display name
+        kb: KnowledgeBase for tracking card knowledge
+    """
 
-    def __init__(self, name, kb):
+    def __init__(self, name: str, kb: KnowledgeBase) -> None:
         self.name = name
         self.kb = kb
 
-    def get_reachable_rooms(self, position):
+    def get_reachable_rooms(self, position: Optional[str]) -> List[str]:
+        """Return sorted list of rooms reachable from current position.
+        
+        Includes current room, adjacent rooms, and any secret passage destination.
+        If position is invalid, returns all rooms (teleport for debugging).
+        
+        Args:
+            position: Current room name or None
+            
+        Returns:
+            Sorted list of reachable room names
+        """
         if not position or position not in ROOM_ADJACENCY:
             return sorted(ROOMS)
 
@@ -33,7 +59,15 @@ class ClueBot:
 
         return sorted(reachable)
 
-    def get_legal_suggestions(self, position):
+    def get_legal_suggestions(self, position: str) -> List[Tuple[str, str, str]]:
+        """Generate all legal (suspect, weapon, room) tuples from current position.
+        
+        Args:
+            position: Current room name
+            
+        Returns:
+            List of (suspect, weapon, room) tuples in lexicographic order
+        """
         suggestions = [
             (suspect, weapon, room)
             for room in self.get_reachable_rooms(position)
@@ -42,7 +76,19 @@ class ClueBot:
         ]
         return suggestions
 
-    def evaluate_move(self, move, responder_order):
+    def evaluate_move(self, move: Tuple[str, str, str], responder_order: List[str]) -> float:
+        """Score a move by worst-case constraint reduction across all response outcomes.
+        
+        Uses minimax reasoning: assumes opponents will respond in the way that
+        minimizes knowledge gain. Returns negative infinity if no valid responses.
+        
+        Args:
+            move: (suspect, weapon, room) tuple to evaluate
+            responder_order: List of player names in response order
+            
+        Returns:
+            Worst-case score (lower = better, negative infinity = invalid)
+        """
         baseline = self.kb.snapshot_metrics()
         outcome_scores = []
 
@@ -68,14 +114,18 @@ class ClueBot:
         candidates = []
 
         for move in self.get_legal_suggestions(current_room):
+            # Core evaluation: worst-case constraint reduction
             raw_score = self.evaluate_move(move, responder_order)
+            # Bonus for cards with many possible owners (high information value)
             info_pressure = self._information_pressure(move)
+            # Penalty for repeating recent suggestions to avoid loops
             repeat_penalty = self._repeat_penalty(
                 move,
                 recent_suggestions=recent_suggestions,
                 recent_rooms=recent_rooms,
                 no_progress_streak=no_progress_streak,
             )
+            # Combined score: knowledge gain + exploration bonus - repetition penalty
             score = raw_score + info_pressure - repeat_penalty
             candidates.append(
                 {
@@ -87,7 +137,9 @@ class ClueBot:
                 }
             )
 
+        # Sort by score (descending) then lexicographically for deterministic tie-breaking
         candidates.sort(key=lambda item: (-item["score"], item["move"]))
+        # Apply escape rule: force exploration if stuck in local optimum
         filtered_candidates = self._apply_escape_rule(
             candidates,
             recent_suggestions=recent_suggestions,
@@ -100,6 +152,7 @@ class ClueBot:
         for candidate in filtered_candidates:
             move = candidate["move"]
             score = candidate["score"]
+            # Select best score, with lexicographic tie-breaking for determinism
             if score > best_score or (
                 score == best_score and (best_move is None or move < best_move)
             ):

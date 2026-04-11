@@ -1,6 +1,9 @@
 """
-Lightweight GameStateTracker — records suggestions, responses, shows, and accusations
-for use by bots and analysis tools.
+Lightweight GameStateTracker — append-only log of game events for analysis.
+
+Records all suggestions, responses, card shows, and accusations in a structured
+format. Used by BotPlayer for move evaluation and by simulation tools for
+game analysis. Provides immutable history for deterministic bot behavior.
 """
 
 

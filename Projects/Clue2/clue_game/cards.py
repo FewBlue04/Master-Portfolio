@@ -1,7 +1,13 @@
 """
-Clue game card definitions and constants.
+Clue game constants — card definitions, room adjacency, and secret passages.
+
+Defines all game constants including suspect/weapon/room lists, room adjacency
+graph for movement, and secret passage connections. Used by all modules for
+validation and game mechanics.
 """
 
+# === Card Definitions ===
+# Standard Clue suspect characters
 SUSPECTS = [
     "Miss Scarlett",
     "Col. Mustard",
@@ -11,6 +17,7 @@ SUSPECTS = [
     "Prof. Plum",
 ]
 
+# Standard Clue murder weapons
 WEAPONS = [
     "Candlestick",
     "Knife",
@@ -20,6 +27,7 @@ WEAPONS = [
     "Wrench",
 ]
 
+# Standard Clue room locations
 ROOMS = [
     "Kitchen",
     "Ballroom",
@@ -32,8 +40,11 @@ ROOMS = [
     "Dining Room",
 ]
 
+# === Derived Collections ===
+# Master list of all cards in the game
 ALL_CARDS = SUSPECTS + WEAPONS + ROOMS
 
+# Map each card to its category for validation
 CARD_TYPE = {}
 for s in SUSPECTS:
     CARD_TYPE[s] = "suspect"
@@ -42,7 +53,8 @@ for w in WEAPONS:
 for r in ROOMS:
     CARD_TYPE[r] = "room"
 
-# Board layout: rooms and their adjacency (for movement simulation)
+# === Board Layout ===
+# Room adjacency graph for legal movement (door-to-door connections)
 ROOM_ADJACENCY = {
     "Kitchen": ["Ballroom", "Dining Room"],
     "Ballroom": ["Kitchen", "Conservatory", "Billiard Room"],
@@ -55,7 +67,7 @@ ROOM_ADJACENCY = {
     "Dining Room": ["Lounge", "Kitchen"],
 }
 
-# Secret passages (classic Clue)
+# Secret passages for teleport movement (classic Clue board connections)
 SECRET_PASSAGES = {
     "Kitchen": "Study",
     "Study": "Kitchen",
@@ -63,6 +75,8 @@ SECRET_PASSAGES = {
     "Lounge": "Conservatory",
 }
 
+# === UI Display Constants ===
+# Color scheme for suspect tokens on the game board
 SUSPECT_COLORS = {
     "Miss Scarlett": "#e74c3c",
     "Col. Mustard": "#f39c12",
@@ -72,6 +86,7 @@ SUSPECT_COLORS = {
     "Prof. Plum": "#8e44ad",
 }
 
+# Unicode icons for weapon cards in the UI
 WEAPON_ICONS = {
     "Candlestick": "🕯",
     "Knife": "🔪",

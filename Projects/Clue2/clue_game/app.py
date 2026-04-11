@@ -1,5 +1,9 @@
 """
-Clue Game - Luxury Noir Tkinter UI.
+Luxury Noir Tkinter UI - renders game state and handles user interactions.
+
+Provides the main ClueApp class that creates the game window, board visualization,
+notebook interface, and handles mouse/keyboard events. Consumes events from
+GameEngine and forwards user actions to the engine.
 """
 
 import tkinter as tk

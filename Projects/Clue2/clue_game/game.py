@@ -1,6 +1,14 @@
 """
-Clue Game Engine — manages game state, turns, and rules.
+Clue rules engine — manages game state, turns, suggestions, and accusations.
+
+Core engine that enforces Clue rules, deals cards, manages turn order,
+and maintains an event log for UI consumption. Creates Player objects
+and coordinates with BotPlayer instances for AI moves.
 """
+
+from __future__ import annotations
+
+from typing import Dict, List, Optional, Tuple, Union
 
 import random
 
@@ -10,9 +18,21 @@ from .state_tracker import GameStateTracker
 
 
 class Player:
-    """Simple human player model."""
+    """Human player model with cards and position.
+    
+    Args:
+        name: Player display name
+        cards: List of cards dealt to this player
+        
+    Attributes:
+        name: Player display name
+        cards: List of cards held by player
+        current_room: Current room location (randomly assigned)
+        eliminated: Whether player has made a false accusation
+        is_human: Always True for Player instances
+    """
 
-    def __init__(self, name, cards):
+    def __init__(self, name: str, cards: List[str]) -> None:
         self.name = name
         self.cards = list(cards)
         self.current_room = random.choice(ROOMS)
@@ -21,9 +41,28 @@ class Player:
 
 
 class GameEngine:
-    """Clue rules engine: dealing, turns, suggestions, accusations, and UI-facing event log."""
+    """Clue rules engine: dealing, turns, suggestions, accusations, and UI-facing event log.
+    
+    Manages complete game state including players, turn order, solution cards,
+    and maintains an event log for UI consumption. Coordinates with BotPlayer
+    instances for AI decisions and enforces all Clue rules.
+    
+    Args:
+        human_name: Name for human player (default: "You")
+        num_bots: Number of AI opponents (1-5, default: 3)
+        
+    Attributes:
+        player_names: List of all player names in turn order
+        players: Dict mapping player names to Player/BotPlayer instances
+        solution: Dict with murder solution {suspect, weapon, room}
+        log: List of event strings for UI display
+        game_over: Boolean indicating if game has ended
+        winner: Name of winning player or None if ongoing
+        current_player_name: Name of player whose turn it is
+        pending_suggestion: Current suggestion awaiting responses
+    """
 
-    def __init__(self, human_name="You", num_bots=3):
+    def __init__(self, human_name: str = "You", num_bots: int = 3) -> None:
         self.human_name = human_name
         self.num_bots = max(1, min(num_bots, 5))  # 1-5 bots
         self.log = []  # event log for UI
@@ -116,14 +155,20 @@ class GameEngine:
     # Turn management
     # ------------------------------------------------------------------
 
-    def get_current_player(self):
+    def get_current_player(self) -> Union[Player, BotPlayer]:
+        """Return the Player/BotPlayer instance whose turn it is."""
         return self.players[self.current_player_name]
 
-    def is_human_turn(self):
+    def is_human_turn(self) -> bool:
+        """Return True if it's the human player's turn."""
         return self.current_player_name == self.human_name
 
     def advance_turn(self):
-        """Move to the next non-eliminated player."""
+        """Move to the next non-eliminated player.
+        
+        Updates current_turn_index and current_player_name to point to the next
+        player in turn order who hasn't been eliminated by a false accusation.
+        """
         while True:
             self.current_turn_index = (self.current_turn_index + 1) % len(self.turn_order)
             name = self.turn_order[self.current_turn_index]

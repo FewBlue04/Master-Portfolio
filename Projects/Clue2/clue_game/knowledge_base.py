@@ -1,13 +1,15 @@
 """
-Deterministic constraint engine for Clue.
+Deterministic constraint engine for Clue — CSP-style knowledge propagation.
 
-The envelope is represented as a special entity, and every update is
-propagated to closure before control returns to callers.
+Implements a constraint satisfaction problem solver using logical inference.
+Represents the murder envelope as a special entity and propagates all updates
+to logical closure before returning to callers. Used by BotPlayer for deductions.
 """
 
 from __future__ import annotations
 
 from copy import deepcopy
+from typing import Dict, List, Optional, Set, Tuple, Union
 
 from .cards import ALL_CARDS, ROOMS, SUSPECTS, WEAPONS
 
@@ -24,9 +26,25 @@ class ContradictionError(Exception):
 
 
 class KnowledgeBase:
-    """Constraint store for one player: ``has_card`` assignments and propagation to a fixed point."""
+    """Constraint store for one player with logical propagation to fixed point.
+    
+    Maintains a boolean matrix of (entity, card) assignments where True means
+    the entity has the card, False means they don't, and None means unknown.
+    Propagates all constraints to logical closure before returning to callers.
+    
+    Args:
+        player_names: List of all player names
+        my_name: This bot's player name
+        my_cards: List of cards dealt to this bot
+        num_cards_per_player: Dict mapping player names to card counts
+        
+    Attributes:
+        entities: List of player names plus ENVELOPE
+        has_card: Dict mapping (entity, card) -> True/False/None
+        clauses: List of (entity, frozenset(cards)) for "at least one" constraints
+    """
 
-    def __init__(self, player_names, my_name, my_cards, num_cards_per_player):
+    def __init__(self, player_names: List[str], my_name: str, my_cards: List[str], num_cards_per_player: Dict[str, int]) -> None:
         self.player_names = list(player_names)
         self.my_name = my_name
         self.num_cards_per_player = dict(num_cards_per_player)
@@ -51,50 +69,94 @@ class KnowledgeBase:
 
         self.propagate()
 
-    def clone(self):
+    def clone(self) -> "KnowledgeBase":
         return deepcopy(self)
 
-    def add_constraint(self, entity, card, value):
+    def add_constraint(self, entity: str, card: str, value: bool) -> None:
+        """Add a constraint and propagate to logical closure.
+        
+        Args:
+            entity: Player name or ENVELOPE
+            card: Card name
+            value: True (has card) or False (doesn't have card)
+        """
         self._assign(entity, card, value)
         self.propagate()
 
-    def observe_hand(self, player, card):
+    def observe_hand(self, player: str, card: str) -> None:
+        """Record that a player has a specific card (e.g., from initial deal)."""
         self.add_constraint(player, card, True)
 
     def observe_showed_card_to_me(self, player, card):
+        """Record that a player showed me a specific card."""
         self.observe_hand(player, card)
 
     def observe_no_show(self, player, suspect, weapon, room):
+        """Record that a player couldn't show any of the three suggested cards.
+        
+        Args:
+            player: Player who couldn't show
+            suspect, weapon, room: The three suggested cards
+        """
         for card in (suspect, weapon, room):
             self._assign(player, card, False)
         self.propagate()
 
     def observe_showed_unknown(self, player, suspect, weapon, room):
+        """Record that a player showed one of the three cards, but we don't know which.
+        
+        Creates an "at least one" clause for logical propagation.
+        """
         self.clauses.append((player, frozenset((suspect, weapon, room))))
         self.propagate()
 
     def observe_showed_card_to_other(self, player, suspect, weapon, room):
+        """Record that a player showed a card to someone else (unknown to us)."""
         self.observe_showed_unknown(player, suspect, weapon, room)
 
-    def get_possible_owners(self, card):
+    def get_possible_owners(self, card: str) -> Set[str]:
+        """Return set of entities that could possibly have this card.
+        
+        Args:
+            card: Card name to query
+            
+        Returns:
+            Set of entity names (players or ENVELOPE) where has_card is not False
+        """
         return {entity for entity in self.entities if self.has_card[(entity, card)] is not False}
 
     def get_envelope_candidates(self, category):
+        """Return cards in a category that could still be in the envelope.
+        
+        Args:
+            category: One of 'suspect', 'weapon', 'room'
+            
+        Returns:
+            Set of card names that could be in the envelope
+        """
         return {
             card for card in CATEGORIES[category] if self.has_card[(ENVELOPE, card)] is not False
         }
 
-    def get_solution(self):
+    def get_solution(self) -> Tuple[Optional[str], Optional[str], Optional[str]]:
+        """Return the deduced solution if known.
+        
+        Returns:
+            Tuple of (suspect, weapon, room) where each element is a card name
+            or None if not yet determined
+        """
         return (
             self._find_envelope_card("suspect"),
             self._find_envelope_card("weapon"),
             self._find_envelope_card("room"),
         )
 
-    def can_accuse(self):
+    def can_accuse(self) -> bool:
+        """Return True if the solution is fully determined and accusation is safe."""
         return self.is_solved()
 
-    def is_solved(self):
+    def is_solved(self) -> bool:
+        """Return True if all three solution cards are determined."""
         suspect, weapon, room = self.get_solution()
         return suspect is not None and weapon is not None and room is not None
 
@@ -118,6 +180,14 @@ class KnowledgeBase:
         }
 
     def score_delta(self, before_metrics):
+        """Calculate knowledge improvement score (higher = more information gained).
+        
+        Positive score indicates reduction in uncertainty through:
+        - Fewer possible owners for cards
+        - More confirmed card assignments
+        - Fewer envelope candidates
+        - Fewer unresolved clauses
+        """
         after = self.snapshot_metrics()
         return (
             before_metrics["total_possible_owners"]
@@ -149,14 +219,26 @@ class KnowledgeBase:
         return "unknown"
 
     def propagate(self):
+        """Apply all inference rules to logical closure.
+        
+        Iteratively applies constraint propagation rules until no new deductions
+        can be made. Each rule returns True if it made changes, causing another
+        iteration of the propagation loop.
+        """
         changed = True
         while changed:
             changed = False
+            # Rule 1: Each card can only be owned by one entity
             changed |= self._apply_card_uniqueness()
+            # Rule 2: If entity has exactly one possible card in a clause, assign it
             changed |= self._apply_singleton_assignments()
+            # Rule 3: Players can't have more cards than their hand size
             changed |= self._apply_player_card_limits()
+            # Rule 4: Remove impossible cards from "at least one" clauses
             changed |= self._apply_clause_reduction()
+            # Rule 5: Envelope must have exactly one card per category
             changed |= self._apply_envelope_category_rules()
+            # Verify no contradictions were introduced
             self._check_consistency()
 
     def _assign(self, entity, card, value):

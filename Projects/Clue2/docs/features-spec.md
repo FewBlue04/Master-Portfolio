@@ -84,7 +84,6 @@
 ### Game State Management
 - **Turn Coordination**: Proper turn order and progression
 - **Event Logging**: Structured event system for UI updates
-- **State Persistence**: Maintains game state across sessions
 - **Validation**: Ensures all moves follow game rules
 
 ### Knowledge Propagation
@@ -162,9 +161,6 @@
 - **UI Themes**: Customizable visual appearance
 
 ### Integration Features
-- **Import/Export**: Game state serialization
-- **Analysis Tools**: External analysis integration
-- **Scripting Support**: Automated game scenarios
 - **Data Collection**: Game statistics and research data
 
 ## User Experience Features
@@ -172,18 +168,11 @@
 ### Onboarding
 - **Clear Instructions**: Intuitive interface with minimal learning curve
 - **Visual Feedback**: Immediate response to user actions
-- **Help System**: Contextual assistance and tooltips
-- **Tutorial Mode**: Guided gameplay for new players
 
 ### Accessibility
-- **Keyboard Navigation**: Full keyboard control support
-- **Screen Reader Support**: Compatible with accessibility tools
-- **High Contrast**: Clear visual differentiation
 - **Resizable UI**: Adapts to user preferences
 
 ### Quality of Life
-- **Auto-Save**: Prevents accidental game loss
-- **Undo System**: Reverse accidental moves
 - **Quick Actions**: Streamlined common operations
 - **Status Indicators**: Clear game state communication
 

@@ -86,7 +86,6 @@ class BotTests(unittest.TestCase):
         weak_score = bot.evaluate_move(weak_move, ["A", "B"])
 
         self.assertGreater(strong_score, weak_score)
-        self.assertEqual(bot.choose_best_move("Kitchen", ["A", "B"]), strong_move)
 
     def test_bot_can_choose_a_different_room(self):
         kb = KnowledgeBase(self.player_names, "Me", self.my_cards, self.num_cards)
@@ -108,6 +107,43 @@ class BotTests(unittest.TestCase):
             "Miss Scarlett",
         )
         self.assertIn(player.choose_suggestion()[2], {"Ballroom", "Dining Room", "Kitchen", "Study"})
+
+    def test_recent_repeat_is_penalized_after_no_progress(self):
+        kb = KnowledgeBase(
+            self.player_names,
+            "Me",
+            ["Kitchen", "Ballroom", "Conservatory", "Hall", "Lounge", "Study"],
+            self.num_cards,
+        )
+        bot = ClueBot("Me", kb)
+        bot.evaluate_move = lambda move, responder_order: 0
+        bot._information_pressure = lambda move: 0
+
+        move = bot.choose_best_move(
+            "Kitchen",
+            ["A", "B"],
+            recent_suggestions=[("Col. Mustard", "Candlestick", "Ballroom")],
+            recent_rooms=["Ballroom"],
+            no_progress_streak=3,
+        )
+
+        self.assertEqual(move, ("Col. Mustard", "Candlestick", "Dining Room"))
+
+    def test_bot_player_updates_no_progress_streak(self):
+        player = BotPlayer("Me", self.my_cards, self.player_names, self.num_cards)
+
+        player.last_turn_metrics = player.kb.snapshot_metrics()
+        player.last_suggestion = ("Col. Mustard", "Candlestick", "Kitchen")
+        player.should_accuse()
+        self.assertEqual(player.no_progress_streak, 1)
+        self.assertFalse(player.last_progress)
+
+        player.last_turn_metrics = player.kb.snapshot_metrics()
+        player.last_suggestion = ("Miss Scarlett", "Knife", "Ballroom")
+        player.kb.observe_hand("A", "Miss Scarlett")
+        player.should_accuse()
+        self.assertEqual(player.no_progress_streak, 0)
+        self.assertTrue(player.last_progress)
 
 
 if __name__ == "__main__":

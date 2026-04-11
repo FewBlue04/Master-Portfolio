@@ -127,6 +127,7 @@ class KnowledgeBase:
                 len(self.get_envelope_candidates(category))
                 for category in CATEGORIES
             ),
+            "unresolved_clauses": len(self.clauses),
         }
 
     def score_delta(self, before_metrics):
@@ -135,6 +136,7 @@ class KnowledgeBase:
             before_metrics["total_possible_owners"] - after["total_possible_owners"]
             + after["confirmed_assignments"] - before_metrics["confirmed_assignments"]
             + before_metrics["envelope_candidate_total"] - after["envelope_candidate_total"]
+            + before_metrics.get("unresolved_clauses", 0) - after.get("unresolved_clauses", 0)
         )
 
     def get_notebook(self):

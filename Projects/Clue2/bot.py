@@ -7,6 +7,8 @@ lexicographic tie-breaking. No probability or randomness is used.
 
 from __future__ import annotations
 
+from collections import deque
+
 from engine.cards import ROOMS, ROOM_ADJACENCY, SECRET_PASSAGES, SUSPECTS, WEAPONS
 from engine.knowledge_base import ContradictionError, KnowledgeBase
 
@@ -58,17 +60,110 @@ class ClueBot:
 
         return min(outcome_scores)
 
-    def choose_best_move(self, current_room, responder_order):
+    def choose_best_move(
+        self,
+        current_room,
+        responder_order,
+        recent_suggestions=None,
+        recent_rooms=None,
+        no_progress_streak=0,
+        debug=False,
+    ):
+        recent_suggestions = list(recent_suggestions or [])
+        recent_rooms = list(recent_rooms or [])
+        candidates = []
+
+        for move in self.get_legal_suggestions(current_room):
+            raw_score = self.evaluate_move(move, responder_order)
+            info_pressure = self._information_pressure(move)
+            repeat_penalty = self._repeat_penalty(
+                move,
+                recent_suggestions=recent_suggestions,
+                recent_rooms=recent_rooms,
+                no_progress_streak=no_progress_streak,
+            )
+            score = raw_score + info_pressure - repeat_penalty
+            candidates.append(
+                {
+                    "move": move,
+                    "score": score,
+                    "raw_score": raw_score,
+                    "info_pressure": info_pressure,
+                    "repeat_penalty": repeat_penalty,
+                }
+            )
+
+        candidates.sort(key=lambda item: (-item["score"], item["move"]))
+        filtered_candidates = self._apply_escape_rule(
+            candidates,
+            recent_suggestions=recent_suggestions,
+            no_progress_streak=no_progress_streak,
+        )
+
         best_move = None
         best_score = float("-inf")
 
-        for move in self.get_legal_suggestions(current_room):
-            score = self.evaluate_move(move, responder_order)
+        for candidate in filtered_candidates:
+            move = candidate["move"]
+            score = candidate["score"]
             if score > best_score or (score == best_score and (best_move is None or move < best_move)):
                 best_score = score
                 best_move = move
 
+        if debug:
+            top_candidates = filtered_candidates[:3]
+            print(
+                f"[{self.name}] current_room={current_room} no_progress={no_progress_streak} "
+                f"choice={best_move} candidates={top_candidates}"
+            )
+
         return best_move
+
+    def _information_pressure(self, move):
+        suspect, weapon, room = move
+        pressure = 0
+
+        for card in (suspect, weapon, room):
+            possible_owners = len(self.kb.get_possible_owners(card))
+            pressure += max(0, len(self.kb.entities) - possible_owners)
+
+            category = "room" if card in ROOMS else ("suspect" if card in SUSPECTS else "weapon")
+            if card in self.kb.get_envelope_candidates(category):
+                pressure += 1
+
+        overlap = 0
+        move_cards = {suspect, weapon, room}
+        for entity, clause_cards in self.kb.clauses:
+            overlap += len(move_cards & set(clause_cards))
+
+        return pressure + overlap
+
+    def _repeat_penalty(self, move, recent_suggestions, recent_rooms, no_progress_streak):
+        penalty = 0
+
+        for recency, previous_move in enumerate(reversed(recent_suggestions), start=1):
+            if previous_move == move:
+                penalty += max(1, 8 - recency)
+            elif previous_move[2] == move[2]:
+                penalty += max(0, 4 - recency)
+
+        if no_progress_streak > 0:
+            for recency, room in enumerate(reversed(recent_rooms), start=1):
+                if room == move[2]:
+                    penalty += max(1, 5 - recency) + min(no_progress_streak, 4)
+
+        return penalty
+
+    def _apply_escape_rule(self, candidates, recent_suggestions, no_progress_streak):
+        if no_progress_streak < 3:
+            return candidates
+
+        recent_set = set(recent_suggestions)
+        fresh_candidates = [
+            candidate for candidate in candidates
+            if candidate["move"] not in recent_set
+        ]
+        return fresh_candidates or candidates
 
     def _enumerate_outcomes(self, move, responder_order):
         suspect, weapon, room = move
@@ -109,11 +204,12 @@ class ClueBot:
 
 
 class BotPlayer:
-    def __init__(self, name, cards, all_players, num_cards_per_player, **_ignored):
+    def __init__(self, name, cards, all_players, num_cards_per_player, debug=False, **_ignored):
         self.name = name
         self.cards = list(cards)
         self.all_players = list(all_players)
         self.num_cards_per_player = dict(num_cards_per_player)
+        self.debug = debug
 
         self.current_room = None
         self.eliminated = False
@@ -126,6 +222,29 @@ class BotPlayer:
             num_cards_per_player=self.num_cards_per_player,
         )
         self.policy = ClueBot(self.name, self.kb)
+        self.recent_suggestions = deque(maxlen=6)
+        self.recent_rooms = deque(maxlen=6)
+        self.no_progress_streak = 0
+        self.last_turn_metrics = None
+        self.last_suggestion = None
+        self.last_progress = False
+
+    def _finalize_previous_turn(self):
+        if self.last_turn_metrics is None:
+            return
+
+        current_metrics = self.kb.snapshot_metrics()
+        progress = self.kb.score_delta(self.last_turn_metrics) > 0
+        self.last_progress = progress
+        self.no_progress_streak = 0 if progress else self.no_progress_streak + 1
+
+        if self.debug:
+            print(
+                f"[{self.name}] previous_move={self.last_suggestion} progress={progress} "
+                f"no_progress_streak={self.no_progress_streak} metrics={current_metrics}"
+            )
+
+        self.last_turn_metrics = None
 
     def _responder_order(self):
         start = (self.all_players.index(self.name) + 1) % len(self.all_players)
@@ -135,6 +254,7 @@ class BotPlayer:
         ]
 
     def should_accuse(self):
+        self._finalize_previous_turn()
         return self.kb.can_accuse()
 
     def choose_accusation(self):
@@ -142,7 +262,19 @@ class BotPlayer:
 
     def choose_suggestion(self):
         responder_order = self._responder_order()
-        return self.policy.choose_best_move(self.current_room, responder_order)
+        move = self.policy.choose_best_move(
+            self.current_room,
+            responder_order,
+            recent_suggestions=self.recent_suggestions,
+            recent_rooms=self.recent_rooms,
+            no_progress_streak=self.no_progress_streak,
+            debug=self.debug,
+        )
+        self.recent_suggestions.append(move)
+        self.recent_rooms.append(move[2])
+        self.last_suggestion = move
+        self.last_turn_metrics = self.kb.snapshot_metrics()
+        return move
 
     def pick_card_to_show(self, suspect, weapon, room, asker_name):
         showable = sorted(card for card in (suspect, weapon, room) if card in self.cards)
@@ -168,4 +300,6 @@ class BotPlayer:
                 "room": room,
             },
             "metrics": metrics,
+            "no_progress_streak": self.no_progress_streak,
+            "last_progress": self.last_progress,
         }

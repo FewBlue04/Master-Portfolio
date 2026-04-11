@@ -55,6 +55,7 @@ def aggregate_bot_metrics(game):
         metrics["total_possible_owners"] += snapshot["total_possible_owners"]
         metrics["confirmed_assignments"] += snapshot["confirmed_assignments"]
         metrics["envelope_candidate_total"] += snapshot["envelope_candidate_total"]
+        metrics["unresolved_clauses"] = metrics.get("unresolved_clauses", 0) + snapshot["unresolved_clauses"]
         metrics["solved_bots"] += int(player.kb.is_solved())
 
     return metrics
@@ -65,6 +66,7 @@ def metrics_progressed(before, after):
         after["total_possible_owners"] < before["total_possible_owners"]
         or after["confirmed_assignments"] > before["confirmed_assignments"]
         or after["envelope_candidate_total"] < before["envelope_candidate_total"]
+        or after.get("unresolved_clauses", 0) < before.get("unresolved_clauses", 0)
         or after["solved_bots"] > before["solved_bots"]
     )
 

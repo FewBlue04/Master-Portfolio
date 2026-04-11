@@ -1,8 +1,8 @@
 import unittest
 
-from bot import BotPlayer
-from cards import CARD_TYPE, ROOMS, SUSPECTS, WEAPONS
-from game import GameEngine
+from clue_game.bot import BotPlayer
+from clue_game.cards import CARD_TYPE, ROOMS, SUSPECTS, WEAPONS
+from clue_game.game import GameEngine
 
 
 class GameEngineTests(unittest.TestCase):
@@ -11,10 +11,7 @@ class GameEngineTests(unittest.TestCase):
 
         sim_name = game.human_name
         sim_player = game.players[sim_name]
-        num_cards_per_player = {
-            name: len(game.players[name].cards)
-            for name in game.player_names
-        }
+        num_cards_per_player = {name: len(game.players[name].cards) for name in game.player_names}
 
         sim_bot = BotPlayer(
             name=sim_name,

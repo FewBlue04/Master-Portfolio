@@ -3,13 +3,15 @@ Clue Game Engine — manages game state, turns, and rules.
 """
 
 import random
-from engine.cards import SUSPECTS, WEAPONS, ROOMS, ALL_CARDS
-from engine.bot import BotPlayer
-from engine.state_tracker import GameStateTracker
+
+from .bot import BotPlayer
+from .cards import ALL_CARDS, ROOMS, SUSPECTS, WEAPONS
+from .state_tracker import GameStateTracker
 
 
 class Player:
     """Simple human player model."""
+
     def __init__(self, name, cards):
         self.name = name
         self.cards = list(cards)
@@ -19,6 +21,8 @@ class Player:
 
 
 class GameEngine:
+    """Clue rules engine: dealing, turns, suggestions, accusations, and UI-facing event log."""
+
     def __init__(self, human_name="You", num_bots=3):
         self.human_name = human_name
         self.num_bots = max(1, min(num_bots, 5))  # 1-5 bots
@@ -38,13 +42,14 @@ class GameEngine:
         # Pick solution
         self.solution = {
             "suspect": random.choice(SUSPECTS),
-            "weapon":  random.choice(WEAPONS),
-            "room":    random.choice(ROOMS),
+            "weapon": random.choice(WEAPONS),
+            "room": random.choice(ROOMS),
         }
 
         # Remaining cards to deal
         remaining = [
-            c for c in ALL_CARDS
+            c
+            for c in ALL_CARDS
             if c != self.solution["suspect"]
             and c != self.solution["weapon"]
             and c != self.solution["room"]
@@ -52,7 +57,7 @@ class GameEngine:
         random.shuffle(remaining)
 
         # Player names
-        bot_names = [f"Bot {chr(65+i)}" for i in range(self.num_bots)]
+        bot_names = [f"Bot {chr(65 + i)}" for i in range(self.num_bots)]
         self.player_names = [self.human_name] + bot_names
         n_players = len(self.player_names)
 
@@ -61,9 +66,7 @@ class GameEngine:
         for i, card in enumerate(remaining):
             hands[self.player_names[i % n_players]].append(card)
 
-        num_cards_per_player = {
-            name: len(cards) for name, cards in hands.items()
-        }
+        num_cards_per_player = {name: len(cards) for name, cards in hands.items()}
 
         # Create players
         self.players = {}
@@ -142,15 +145,12 @@ class GameEngine:
             self.players[suspect].current_room = room
         asker.current_room = room
 
-        self._log(
-            f"💬 {asker_name} suggests: {suspect}, {weapon}, in {room}",
-            "suggestion"
-        )
+        self._log(f"💬 {asker_name} suggests: {suspect}, {weapon}, in {room}", "suggestion")
 
         # record suggestion and responder order for tracker
         order = self.turn_order
         start = (order.index(asker_name) + 1) % len(order)
-        responder_sequence = [order[(start + i) % len(order)] for i in range(len(order)-1)]
+        responder_sequence = [order[(start + i) % len(order)] for i in range(len(order) - 1)]
         self.state_tracker.record_suggestion(asker_name, suspect, weapon, room, responder_sequence)
 
         # Find who can show
@@ -219,10 +219,15 @@ class GameEngine:
                     visible_card = card if asker_player and asker_player.is_human else None
                     # record show in tracker (card may be None for others)
                     self.state_tracker.record_show(responder_name, asker_name, visible_card)
-                    return {"type": "shown", "shower": responder_name, "asker": asker_name, "card": visible_card}
+                    return {
+                        "type": "shown",
+                        "shower": responder_name,
+                        "asker": asker_name,
+                        "card": visible_card,
+                    }
 
         # Nobody could show
-        self._log(f"   🚨 Nobody could refute the suggestion!", "alert")
+        self._log("   🚨 Nobody could refute the suggestion!", "alert")
         # record no refute (no one showed)
         self.state_tracker.record_no_show(None, asker_name, suspect, weapon, room)
         return {"type": "no_refute"}
@@ -274,15 +279,12 @@ class GameEngine:
 
     def make_accusation(self, accuser_name, suspect, weapon, room):
         correct = (
-            suspect == self.solution["suspect"] and
-            weapon  == self.solution["weapon"] and
-            room    == self.solution["room"]
+            suspect == self.solution["suspect"]
+            and weapon == self.solution["weapon"]
+            and room == self.solution["room"]
         )
 
-        self._log(
-            f"⚖️  {accuser_name} accuses: {suspect}, {weapon}, {room}",
-            "accusation"
-        )
+        self._log(f"⚖️  {accuser_name} accuses: {suspect}, {weapon}, {room}", "accusation")
 
         self.state_tracker.record_accusation(accuser_name, suspect, weapon, room, correct)
 

@@ -9,22 +9,16 @@ from __future__ import annotations
 
 from collections import deque
 
-from engine.cards import ROOMS, ROOM_ADJACENCY, SECRET_PASSAGES, SUSPECTS, WEAPONS
-from engine.knowledge_base import ContradictionError, KnowledgeBase
+from .cards import ROOM_ADJACENCY, ROOMS, SECRET_PASSAGES, SUSPECTS, WEAPONS
+from .knowledge_base import ContradictionError, KnowledgeBase
 
 
 class ClueBot:
+    """One-step lookahead policy: scores legal suggestions by constraint reduction."""
+
     def __init__(self, name, kb):
         self.name = name
         self.kb = kb
-
-    def take_turn(self, current_room, responder_order):
-        if self.kb.can_accuse():
-            suspect, weapon, room = self.kb.get_solution()
-            return ("accuse", suspect, weapon, room)
-
-        suspect, weapon, room = self.choose_best_move(current_room, responder_order)
-        return ("suggest", suspect, weapon, room)
 
     def get_reachable_rooms(self, position):
         if not position or position not in ROOM_ADJACENCY:
@@ -106,7 +100,9 @@ class ClueBot:
         for candidate in filtered_candidates:
             move = candidate["move"]
             score = candidate["score"]
-            if score > best_score or (score == best_score and (best_move is None or move < best_move)):
+            if score > best_score or (
+                score == best_score and (best_move is None or move < best_move)
+            ):
                 best_score = score
                 best_move = move
 
@@ -160,8 +156,7 @@ class ClueBot:
 
         recent_set = set(recent_suggestions)
         fresh_candidates = [
-            candidate for candidate in candidates
-            if candidate["move"] not in recent_set
+            candidate for candidate in candidates if candidate["move"] not in recent_set
         ]
         return fresh_candidates or candidates
 
@@ -179,8 +174,7 @@ class ClueBot:
                 continue
 
             candidate_cards = sorted(
-                card for card in cards
-                if branch.has_card[(responder, card)] is not False
+                card for card in cards if branch.has_card[(responder, card)] is not False
             )
 
             for card in candidate_cards:
@@ -204,6 +198,8 @@ class ClueBot:
 
 
 class BotPlayer:
+    """In-game bot: wraps :class:`KnowledgeBase` and :class:`ClueBot` for turns and observations."""
+
     def __init__(self, name, cards, all_players, num_cards_per_player, debug=False, **_ignored):
         self.name = name
         self.cards = list(cards)

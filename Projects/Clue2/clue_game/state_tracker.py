@@ -2,9 +2,11 @@
 Lightweight GameStateTracker — records suggestions, responses, shows, and accusations
 for use by bots and analysis tools.
 """
-from collections import deque
+
 
 class GameStateTracker:
+    """Append-only log of suggestion and accusation events for analysis and simulations."""
+
     def __init__(self, player_names):
         self.player_names = list(player_names)
         self.suggestions = []  # list of suggestion events

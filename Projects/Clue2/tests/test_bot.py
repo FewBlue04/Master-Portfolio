@@ -1,7 +1,7 @@
 import unittest
 
-from bot import BotPlayer, ClueBot
-from knowledge_base import KnowledgeBase
+from clue_game.bot import BotPlayer, ClueBot
+from clue_game.knowledge_base import KnowledgeBase
 
 
 class BotTests(unittest.TestCase):
@@ -106,7 +106,9 @@ class BotTests(unittest.TestCase):
             player.pick_card_to_show("Miss Scarlett", "Knife", "Kitchen", "Me"),
             "Miss Scarlett",
         )
-        self.assertIn(player.choose_suggestion()[2], {"Ballroom", "Dining Room", "Kitchen", "Study"})
+        self.assertIn(
+            player.choose_suggestion()[2], {"Ballroom", "Dining Room", "Kitchen", "Study"}
+        )
 
     def test_recent_repeat_is_penalized_after_no_progress(self):
         kb = KnowledgeBase(

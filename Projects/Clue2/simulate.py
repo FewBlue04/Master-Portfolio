@@ -7,9 +7,8 @@ import random
 import statistics
 from collections import Counter
 
-from engine.bot import BotPlayer
-from engine.game import GameEngine
-
+from clue_game.bot import BotPlayer
+from clue_game.game import GameEngine
 
 DEFAULT_TURN_CAP = 500
 DEFAULT_STALL_LIMIT = 40
@@ -23,10 +22,7 @@ def create_all_bot_game(num_bots, seed=None):
     human_name = game.human_name
     human_player = game.players[human_name]
     my_cards = list(human_player.cards)
-    num_cards_per_player = {
-        name: len(game.players[name].cards)
-        for name in game.player_names
-    }
+    num_cards_per_player = {name: len(game.players[name].cards) for name in game.player_names}
 
     bot = BotPlayer(
         name=human_name,
@@ -55,7 +51,9 @@ def aggregate_bot_metrics(game):
         metrics["total_possible_owners"] += snapshot["total_possible_owners"]
         metrics["confirmed_assignments"] += snapshot["confirmed_assignments"]
         metrics["envelope_candidate_total"] += snapshot["envelope_candidate_total"]
-        metrics["unresolved_clauses"] = metrics.get("unresolved_clauses", 0) + snapshot["unresolved_clauses"]
+        metrics["unresolved_clauses"] = (
+            metrics.get("unresolved_clauses", 0) + snapshot["unresolved_clauses"]
+        )
         metrics["solved_bots"] += int(player.kb.is_solved())
 
     return metrics
@@ -71,7 +69,9 @@ def metrics_progressed(before, after):
     )
 
 
-def run_single_game(num_bots, max_turns=DEFAULT_TURN_CAP, stall_limit=DEFAULT_STALL_LIMIT, seed=None, debug=False):
+def run_single_game(
+    num_bots, max_turns=DEFAULT_TURN_CAP, stall_limit=DEFAULT_STALL_LIMIT, seed=None, debug=False
+):
     game = create_all_bot_game(num_bots=num_bots, seed=seed)
     turns = 0
     no_progress_turns = 0
@@ -114,11 +114,11 @@ def run_single_game(num_bots, max_turns=DEFAULT_TURN_CAP, stall_limit=DEFAULT_ST
         ended_by = "stalled"
 
     suggestion_events = [
-        event for event in game.state_tracker.suggestions
-        if event["type"] == "suggestion"
+        event for event in game.state_tracker.suggestions if event["type"] == "suggestion"
     ]
     no_refute_events = [
-        event for event in game.state_tracker.suggestions
+        event
+        for event in game.state_tracker.suggestions
         if event["type"] == "no_show" and event["passer"] is None
     ]
     accusations = list(game.state_tracker.accusations)
@@ -172,15 +172,9 @@ def summarize_results(results):
         "solve_rate": ended_by_counts["correct_accusation"] / len(results),
         "stall_rate": ended_by_counts["stalled"] / len(results),
         "turn_cap_rate": ended_by_counts["turn_cap"] / len(results),
-        "accusation_accuracy": (
-            total_correct / total_accusations if total_accusations else 0.0
-        ),
-        "average_suggestions": statistics.mean(
-            result["suggestion_count"] for result in results
-        ),
-        "average_no_refutes": statistics.mean(
-            result["no_refute_count"] for result in results
-        ),
+        "accusation_accuracy": (total_correct / total_accusations if total_accusations else 0.0),
+        "average_suggestions": statistics.mean(result["suggestion_count"] for result in results),
+        "average_no_refutes": statistics.mean(result["no_refute_count"] for result in results),
         "average_no_progress_streak": statistics.mean(
             result["max_consecutive_no_progress_turns"] for result in results
         ),
@@ -189,7 +183,14 @@ def summarize_results(results):
     }
 
 
-def run_trials(num_bots, trials=100, max_turns=DEFAULT_TURN_CAP, stall_limit=DEFAULT_STALL_LIMIT, seed=12345, debug=False):
+def run_trials(
+    num_bots,
+    trials=100,
+    max_turns=DEFAULT_TURN_CAP,
+    stall_limit=DEFAULT_STALL_LIMIT,
+    seed=12345,
+    debug=False,
+):
     results = []
     for index in range(trials):
         game_seed = None if seed is None else seed + index

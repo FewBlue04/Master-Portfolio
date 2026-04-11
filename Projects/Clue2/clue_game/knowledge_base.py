@@ -9,8 +9,7 @@ from __future__ import annotations
 
 from copy import deepcopy
 
-from engine.cards import ALL_CARDS, CARD_TYPE, ROOMS, SUSPECTS, WEAPONS
-
+from .cards import ALL_CARDS, ROOMS, SUSPECTS, WEAPONS
 
 ENVELOPE = "__ENVELOPE__"
 CATEGORIES = {
@@ -25,6 +24,8 @@ class ContradictionError(Exception):
 
 
 class KnowledgeBase:
+    """Constraint store for one player: ``has_card`` assignments and propagation to a fixed point."""
+
     def __init__(self, player_names, my_name, my_cards, num_cards_per_player):
         self.player_names = list(player_names)
         self.my_name = my_name
@@ -32,11 +33,7 @@ class KnowledgeBase:
         self.entities = list(self.player_names) + [ENVELOPE]
 
         # (entity, card) -> True | False | None
-        self.has_card = {
-            (entity, card): None
-            for entity in self.entities
-            for card in ALL_CARDS
-        }
+        self.has_card = {(entity, card): None for entity in self.entities for card in ALL_CARDS}
 
         # Each clause means "entity has at least one of these cards".
         self.clauses = []
@@ -80,17 +77,11 @@ class KnowledgeBase:
         self.observe_showed_unknown(player, suspect, weapon, room)
 
     def get_possible_owners(self, card):
-        return {
-            entity
-            for entity in self.entities
-            if self.has_card[(entity, card)] is not False
-        }
+        return {entity for entity in self.entities if self.has_card[(entity, card)] is not False}
 
     def get_envelope_candidates(self, category):
         return {
-            card
-            for card in CATEGORIES[category]
-            if self.has_card[(ENVELOPE, card)] is not False
+            card for card in CATEGORIES[category] if self.has_card[(ENVELOPE, card)] is not False
         }
 
     def get_solution(self):
@@ -116,16 +107,12 @@ class KnowledgeBase:
 
     def snapshot_metrics(self):
         return {
-            "total_possible_owners": sum(
-                len(self.get_possible_owners(card))
-                for card in ALL_CARDS
-            ),
+            "total_possible_owners": sum(len(self.get_possible_owners(card)) for card in ALL_CARDS),
             "confirmed_assignments": sum(
                 1 for card in ALL_CARDS if self._confirmed_owner(card) is not None
             ),
             "envelope_candidate_total": sum(
-                len(self.get_envelope_candidates(category))
-                for category in CATEGORIES
+                len(self.get_envelope_candidates(category)) for category in CATEGORIES
             ),
             "unresolved_clauses": len(self.clauses),
         }
@@ -133,10 +120,14 @@ class KnowledgeBase:
     def score_delta(self, before_metrics):
         after = self.snapshot_metrics()
         return (
-            before_metrics["total_possible_owners"] - after["total_possible_owners"]
-            + after["confirmed_assignments"] - before_metrics["confirmed_assignments"]
-            + before_metrics["envelope_candidate_total"] - after["envelope_candidate_total"]
-            + before_metrics.get("unresolved_clauses", 0) - after.get("unresolved_clauses", 0)
+            before_metrics["total_possible_owners"]
+            - after["total_possible_owners"]
+            + after["confirmed_assignments"]
+            - before_metrics["confirmed_assignments"]
+            + before_metrics["envelope_candidate_total"]
+            - after["envelope_candidate_total"]
+            + before_metrics.get("unresolved_clauses", 0)
+            - after.get("unresolved_clauses", 0)
         )
 
     def get_notebook(self):
@@ -226,14 +217,8 @@ class KnowledgeBase:
         changed = False
 
         for player in self.player_names:
-            confirmed = [
-                card for card in ALL_CARDS
-                if self.has_card[(player, card)] is True
-            ]
-            unknown = [
-                card for card in ALL_CARDS
-                if self.has_card[(player, card)] is None
-            ]
+            confirmed = [card for card in ALL_CARDS if self.has_card[(player, card)] is True]
+            unknown = [card for card in ALL_CARDS if self.has_card[(player, card)] is None]
 
             allowed = self.num_cards_per_player[player]
             remaining = allowed - len(confirmed)
@@ -256,10 +241,7 @@ class KnowledgeBase:
         reduced_clauses = []
 
         for entity, cards in self.clauses:
-            remaining = {
-                card for card in cards
-                if self.has_card[(entity, card)] is not False
-            }
+            remaining = {card for card in cards if self.has_card[(entity, card)] is not False}
 
             if not remaining:
                 raise ContradictionError(f"Unsatisfied clause for {entity}: {sorted(cards)}")
@@ -280,10 +262,7 @@ class KnowledgeBase:
         changed = False
 
         for category, cards in CATEGORIES.items():
-            true_cards = [
-                card for card in cards
-                if self.has_card[(ENVELOPE, card)] is True
-            ]
+            true_cards = [card for card in cards if self.has_card[(ENVELOPE, card)] is True]
             if len(true_cards) > 1:
                 raise ContradictionError(f"Envelope has multiple {category} cards")
 
@@ -294,10 +273,7 @@ class KnowledgeBase:
                         changed |= self._assign(ENVELOPE, card, False)
                 continue
 
-            candidates = [
-                card for card in cards
-                if self.has_card[(ENVELOPE, card)] is not False
-            ]
+            candidates = [card for card in cards if self.has_card[(ENVELOPE, card)] is not False]
 
             if not candidates:
                 raise ContradictionError(f"Envelope has no {category} candidate")
@@ -313,14 +289,8 @@ class KnowledgeBase:
                 raise ContradictionError(f"{card} has no possible owner")
 
         for player in self.player_names:
-            confirmed = sum(
-                1 for card in ALL_CARDS
-                if self.has_card[(player, card)] is True
-            )
-            possible = sum(
-                1 for card in ALL_CARDS
-                if self.has_card[(player, card)] is not False
-            )
+            confirmed = sum(1 for card in ALL_CARDS if self.has_card[(player, card)] is True)
+            possible = sum(1 for card in ALL_CARDS if self.has_card[(player, card)] is not False)
             required = self.num_cards_per_player[player]
 
             if confirmed > required:
@@ -333,9 +303,6 @@ class KnowledgeBase:
                 raise ContradictionError(f"Envelope has no {category} candidates")
 
         for entity, cards in self.clauses:
-            remaining = [
-                card for card in cards
-                if self.has_card[(entity, card)] is not False
-            ]
+            remaining = [card for card in cards if self.has_card[(entity, card)] is not False]
             if not remaining:
                 raise ContradictionError(f"Clause contradiction for {entity}")

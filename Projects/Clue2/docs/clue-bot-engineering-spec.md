@@ -21,11 +21,11 @@ The bot is not a probability model, Monte Carlo player, or deep-search game AI. 
 
 The repo already contains pieces of the target system, but it does not yet satisfy the required design:
 
-- [`knowledge_base.py`](C:\Users\Matt\Downloads\Computer Science\Master-Portfolio\Projects\Clue2\knowledge_base.py) has a useful logical core, but its API is incomplete for simulation-based move scoring and state introspection.
-- [`bot.py`](C:\Users\Matt\Downloads\Computer Science\Master-Portfolio\Projects\Clue2\bot.py) violates the target design by using probability estimates and randomness.
-- [`simulate_quick.py`](C:\Users\Matt\Downloads\Computer Science\Master-Portfolio\Projects\Clue2\simulate_quick.py) explicitly references Monte Carlo behavior, which is out of scope for the target bot.
-- [`engine\bot.py`](C:\Users\Matt\Downloads\Computer Science\Master-Portfolio\Projects\Clue2\engine\bot.py) and related files are thin re-export wrappers, so root-level modules remain the effective implementation surface.
-- [`game.py`](C:\Users\Matt\Downloads\Computer Science\Master-Portfolio\Projects\Clue2\game.py) already provides the integration points where bot observations and turn decisions flow through the engine.
+- [`clue_game/knowledge_base.py`](clue_game/knowledge_base.py) has a useful logical core, but its API is incomplete for simulation-based move scoring and state introspection.
+- [`clue_game/bot.py`](clue_game/bot.py) violated the target design by using probability estimates and randomness (since addressed in code; this spec remains the design reference).
+- [`simulate_quick.py`](simulate_quick.py) explicitly referenced Monte Carlo behavior, which is out of scope for the target bot.
+- Implementation lives in the `clue_game` package (no separate `engine/` shim layer).
+- [`clue_game/game.py`](clue_game/game.py) provides the integration points where bot observations and turn decisions flow through the engine.
 
 ## In Scope
 
@@ -308,9 +308,9 @@ It should be replaced with:
 - guaranteed reduction scoring
 - fixed lexicographic tie-breaking
 
-### 2. Expand `knowledge_base.py`
+### 2. Expand `clue_game/knowledge_base.py`
 
-[`knowledge_base.py`](C:\Users\Matt\Downloads\Computer Science\Master-Portfolio\Projects\Clue2\knowledge_base.py) should become the authoritative constraint engine.
+[`clue_game/knowledge_base.py`](clue_game/knowledge_base.py) should become the authoritative constraint engine.
 
 Required additions:
 
@@ -322,17 +322,17 @@ Required additions:
 - metrics snapshot support
 - cleaner exception model for contradictions
 
-### 3. Align Engine Wrappers
+### 3. Package layout
 
-Files under [`engine`](C:\Users\Matt\Downloads\Computer Science\Master-Portfolio\Projects\Clue2\engine) currently re-export root modules. That pattern can remain, but the implementation pass must verify that imports stay stable after rewrites.
+All engine code imports through the `clue_game` package; keep public imports stable after rewrites.
 
 ### 4. Remove Monte Carlo References
 
-[`simulate_quick.py`](C:\Users\Matt\Downloads\Computer Science\Master-Portfolio\Projects\Clue2\simulate_quick.py) and any other Monte Carlo-related code paths should be removed or rewritten so all simulation remains deterministic and compatible with the new bot.
+[`simulate_quick.py`](simulate_quick.py) and any other Monte Carlo-related code paths should be removed or rewritten so all simulation remains deterministic and compatible with the new bot.
 
 ## Integration Requirements
 
-The rewritten bot must continue to work with [`game.py`](C:\Users\Matt\Downloads\Computer Science\Master-Portfolio\Projects\Clue2\game.py):
+The rewritten bot must continue to work with [`clue_game/game.py`](clue_game/game.py):
 
 - suggestion flow
 - no-show notifications
@@ -384,21 +384,20 @@ The bot is considered complete when all of the following are true:
 
 ### Phase 1. Constraint Engine
 
-- Refactor `knowledge_base.py` into a public, cloneable, testable constraint engine.
+- Refactor `clue_game/knowledge_base.py` into a public, cloneable, testable constraint engine.
 - Add contradiction exception type.
 - Add scoring metric snapshots.
 
 ### Phase 2. Deterministic Bot Policy
 
-- Refactor `bot.py` to remove stochastic logic.
+- Refactor `clue_game/bot.py` to remove stochastic logic.
 - Implement legal suggestion generation.
 - Implement one-step deterministic suggestion evaluation.
 - Add lexicographic tie-breaking.
 
 ### Phase 3. Engine Compatibility
 
-- Verify `game.py` bot hooks still work.
-- Update wrapper modules under `engine/` only if necessary.
+- Verify `clue_game/game.py` bot hooks still work.
 - Remove or rewrite Monte Carlo simulation scripts.
 
 ### Phase 4. Verification
@@ -422,4 +421,4 @@ For implementation, the guaranteed-minimum interpretation is the safer and more 
 
 ## Summary
 
-The target system is a deterministic deduction engine, not a heuristic guesser. The upcoming implementation should primarily rewrite [`knowledge_base.py`](C:\Users\Matt\Downloads\Computer Science\Master-Portfolio\Projects\Clue2\knowledge_base.py), [`bot.py`](C:\Users\Matt\Downloads\Computer Science\Master-Portfolio\Projects\Clue2\bot.py), and Monte Carlo-related simulation code so the Clue bot behaves as a strict logical solver with one-step deterministic move selection.
+The target system is a deterministic deduction engine, not a heuristic guesser. The upcoming implementation should primarily rewrite [`clue_game/knowledge_base.py`](clue_game/knowledge_base.py), [`clue_game/bot.py`](clue_game/bot.py), and Monte Carlo-related simulation code so the Clue bot behaves as a strict logical solver with one-step deterministic move selection.

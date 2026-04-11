@@ -1,6 +1,6 @@
 import unittest
 
-from knowledge_base import ContradictionError, ENVELOPE, KnowledgeBase
+from clue_game.knowledge_base import ENVELOPE, ContradictionError, KnowledgeBase
 
 
 class KnowledgeBaseTests(unittest.TestCase):

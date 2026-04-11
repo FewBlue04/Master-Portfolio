@@ -1,0 +1,44 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "clue-game"
+version = "0.1.0"
+description = "Clue-style game with Tkinter UI and deterministic bot (portfolio / local run)"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = []
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "ruff>=0.8",
+]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+src = ["clue_game", "tests"]
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "F",   # Pyflakes
+    "I",   # isort
+    "UP",  # pyupgrade
+    "W",   # pycodestyle warnings
+]
+ignore = [
+    "E501",  # line length (handled by formatter where practical)
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["clue_game"]
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["clue_game*"]

@@ -56,17 +56,25 @@ class ScrollableFrame(tk.Frame):
         super().__init__(parent, **kwargs)
         self.canvas = tk.Canvas(self, bg=BG_PANEL, highlightthickness=0)
         self.inner = tk.Frame(self.canvas, bg=BG_PANEL)
-        self.scrollbar = ttk.Scrollbar(self, orient="vertical", command=self.canvas.yview)
 
         self.inner.bind("<Configure>", self._on_inner_configure)
-        self.canvas.create_window((0, 0), window=self.inner, anchor="nw")
-        self.canvas.configure(yscrollcommand=self.scrollbar.set)
+        self._inner_window = self.canvas.create_window((0, 0), window=self.inner, anchor="nw")
+        self.canvas.bind("<Configure>", self._on_canvas_configure)
 
-        self.canvas.pack(side="left", fill="both", expand=True)
-        self.scrollbar.pack(side="right", fill="y")
+        self.canvas.pack(fill="both", expand=True)
+
+    def _sync_inner_window_width(self):
+        """Keep embedded frame at content width so grid columns don't stretch with the canvas."""
+        self.canvas.update_idletasks()
+        w = max(self.inner.winfo_reqwidth(), 1)
+        self.canvas.itemconfigure(self._inner_window, width=w)
 
     def _on_inner_configure(self, _event):
+        self._sync_inner_window_width()
         self.canvas.configure(scrollregion=self.canvas.bbox("all"))
+
+    def _on_canvas_configure(self, _event):
+        self._sync_inner_window_width()
 
     def scroll(self, units):
         self.canvas.yview_scroll(units, "units")
@@ -256,9 +264,6 @@ class ClueApp(tk.Tk):
         self.log_text.tag_config("wrong", foreground=RED)
         self.log_text.tag_config("info", foreground=TEXT_DIM)
         self.log_text.tag_config("gameover", foreground=RED)
-        scrollbar = ttk.Scrollbar(frame, command=self.log_text.yview)
-        self.log_text.configure(yscrollcommand=scrollbar.set)
-        scrollbar.pack(side="right", fill="y")
         self.log_text.pack(fill="both", expand=True)
 
     def _build_notebook_panel(self, parent):
@@ -341,30 +346,41 @@ class ClueApp(tk.Tk):
         if not self.game:
             return
 
+        # Pack table northwest so YOU stays just right of the card column, not stretched across the canvas.
+        table = tk.Frame(self.notebook_inner, bg=BG_PANEL)
+        table.pack(anchor="nw")
+
+        table.grid_anchor("nw")
+
         players = self.game.player_names
         human = self.game.human_name
         human_cards = set(self.game.get_human_cards())
-        visible_bots = [p for p in players if p != human] if self.show_bot_cards.get() else []
-        bot_columns = {player: 2 + index for index, player in enumerate(visible_bots)}
+        all_bots = [p for p in players if p != human]
+        show_bots = self.show_bot_cards.get()
+        # Reserve one grid column per bot so layout stays stable when hands are hidden.
+        bot_columns = {player: 2 + index for index, player in enumerate(all_bots)}
+        num_cols = 2 + len(all_bots)
+        for col in range(num_cols):
+            table.grid_columnconfigure(col, weight=0, minsize=0)
 
-        tk.Label(self.notebook_inner, text="", bg=BG_PANEL, width=18).grid(row=0, column=0, sticky="w", padx=(4, 0))
-        tk.Label(self.notebook_inner, text="YOU", bg=BG_PANEL, fg=GOLD, font=("Georgia", 7, "bold"), width=4).grid(row=0, column=1, padx=1)
+        tk.Label(table, text="", bg=BG_PANEL, width=18).grid(row=0, column=0, sticky="w", padx=(4, 0))
+        tk.Label(table, text="YOU", bg=BG_PANEL, fg=GOLD, font=("Georgia", 7, "bold"), width=4).grid(row=0, column=1, sticky="w", padx=(0, 1))
         for player, col in bot_columns.items():
-            tk.Label(self.notebook_inner, text=player.replace("Bot ", "B"), bg=BG_PANEL, fg=TEXT_DIM, font=("Georgia", 7), width=4).grid(row=0, column=col, padx=1)
+            header = player.replace("Bot ", "B") if show_bots else ""
+            tk.Label(table, text=header, bg=BG_PANEL, fg=TEXT_DIM, font=("Georgia", 7), width=4).grid(row=0, column=col, sticky="w", padx=1)
 
-        legend = tk.Frame(self.notebook_inner, bg=BG_PANEL)
-        legend.grid(row=1, column=0, columnspan=2 + len(bot_columns), sticky="w", padx=4, pady=(4, 8))
+        legend = tk.Frame(table, bg=BG_PANEL)
+        legend.grid(row=1, column=0, columnspan=num_cols, sticky="w", padx=4, pady=(4, 8))
         tk.Label(legend, text=f"{NOTEBOOK_GLYPHS['yes']} known   {NOTEBOOK_GLYPHS['no']} ruled out   {NOTEBOOK_GLYPHS['unknown']} unknown", bg=BG_PANEL, fg=TEXT_DIM, font=("Georgia", 7, "italic")).pack(side="left")
-        if not self.show_bot_cards.get():
-            tk.Label(legend, text="   Toggle Show Bot Hands to reveal bot notebook columns", bg=BG_PANEL, fg=TEXT_DIM, font=("Georgia", 7, "italic")).pack(side="left")
 
         row = 2
         for title, cards in (("Suspects", SUSPECTS), ("Weapons", WEAPONS), ("Rooms", ROOMS)):
-            tk.Label(self.notebook_inner, text=title, bg=BG_PANEL, fg=GOLD, font=("Georgia", 9, "bold")).grid(row=row, column=0, columnspan=2 + len(bot_columns), sticky="w", padx=4, pady=(6, 2))
+            tk.Label(table, text=title, bg=BG_PANEL, fg=GOLD, font=("Georgia", 9, "bold")).grid(row=row, column=0, columnspan=num_cols, sticky="w", padx=4, pady=(6, 2))
             row += 1
+       
             for card in cards:
                 known_to_human = card in human_cards or self.revealed_to_player.get(card, False)
-                tk.Label(self.notebook_inner, text=card, bg=BG_PANEL, fg=GOLD if known_to_human else TEXT_MAIN, font=("Georgia", 8, "bold" if known_to_human else "normal"), width=18, anchor="w").grid(row=row, column=0, sticky="w", padx=(4, 0))
+                tk.Label(table, text=card, bg=BG_PANEL, fg=GOLD if known_to_human else TEXT_MAIN, font=("Georgia", 8, "bold" if known_to_human else "normal"), width=18, anchor="w").grid(row=row, column=0, sticky="w", padx=(4, 0))
 
                 if known_to_human:
                     symbol, color = NOTEBOOK_GLYPHS["yes"], GREEN
@@ -375,17 +391,20 @@ class ClueApp(tk.Tk):
                 else:
                     symbol, color = NOTEBOOK_GLYPHS["unknown"], GREY
 
-                tk.Button(self.notebook_inner, text=symbol, fg=color, bg=BG_PANEL, activebackground=BG_CARD, font=("Courier New", 10, "bold"), width=3, relief="flat", bd=0, cursor="arrow" if known_to_human else "hand2", command=(lambda c=card: self._toggle_user_mark(c)) if not known_to_human else (lambda: None)).grid(row=row, column=1, padx=1)
+                tk.Button(table, text=symbol, fg=color, bg=BG_PANEL, activebackground=BG_CARD, font=("Courier New", 10, "bold"), width=3, relief="flat", bd=0, cursor="arrow" if known_to_human else "hand2", command=(lambda c=card: self._toggle_user_mark(c)) if not known_to_human else (lambda: None)).grid(row=row, column=1, sticky="w", padx=(0, 1))
 
                 for player, col in bot_columns.items():
-                    value = self.game.players[player].kb.has_card.get((player, card))
-                    if value is True:
-                        symbol, color = NOTEBOOK_GLYPHS["yes"], GREEN
-                    elif value is False:
-                        symbol, color = NOTEBOOK_GLYPHS["no"], GREY
+                    if show_bots:
+                        value = self.game.players[player].kb.has_card.get((player, card))
+                        if value is True:
+                            symbol, color = NOTEBOOK_GLYPHS["yes"], GREEN
+                        elif value is False:
+                            symbol, color = NOTEBOOK_GLYPHS["no"], GREY
+                        else:
+                            symbol, color = NOTEBOOK_GLYPHS["unknown"], TEXT_DIM
+                        tk.Label(table, text=symbol, bg=BG_PANEL, fg=color, font=("Courier New", 10, "bold"), width=3).grid(row=row, column=col, sticky="w", padx=1)
                     else:
-                        symbol, color = NOTEBOOK_GLYPHS["unknown"], TEXT_DIM
-                    tk.Label(self.notebook_inner, text=symbol, bg=BG_PANEL, fg=color, font=("Courier New", 10, "bold"), width=3).grid(row=row, column=col, padx=1)
+                        tk.Label(table, text="", bg=BG_PANEL, font=("Courier New", 10, "bold"), width=3).grid(row=row, column=col, sticky="w", padx=1)
                 row += 1
 
     def _on_mousewheel_route(self, event):

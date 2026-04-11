@@ -15,7 +15,12 @@ def run_trials(num_bots, trials=20):
         human_name = g.human_name
         my_cards = list(g.players[human_name].cards)
         num_cards_per_player = {name: len(g.players[name].cards) for name in g.player_names}
-        bot = BotPlayer(name=human_name, cards=my_cards, all_players=g.player_names, num_cards_per_player=num_cards_per_player)
+        bot = BotPlayer(
+            name=human_name,
+            cards=my_cards,
+            all_players=g.player_names,
+            num_cards_per_player=num_cards_per_player,
+        )
         bot.is_human = False
         bot.current_room = random.choice(ROOMS)
         g.players[human_name] = bot

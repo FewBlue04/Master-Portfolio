@@ -5,6 +5,7 @@ Clue Game Engine — manages game state, turns, and rules.
 import random
 from engine.cards import SUSPECTS, WEAPONS, ROOMS, ALL_CARDS
 from engine.bot import BotPlayer
+from engine.state_tracker import GameStateTracker
 
 
 class Player:
@@ -87,6 +88,9 @@ class GameEngine:
         self.current_turn_index = 0
         self.current_player_name = self.turn_order[0]
 
+        # State tracker for history/inference
+        self.state_tracker = GameStateTracker(self.player_names)
+
         # Pending state
         self.pending_suggestion = None  # {suspect, weapon, room, asker}
         self.pending_responder_index = None
@@ -143,6 +147,12 @@ class GameEngine:
             "suggestion"
         )
 
+        # record suggestion and responder order for tracker
+        order = self.turn_order
+        start = (order.index(asker_name) + 1) % len(order)
+        responder_sequence = [order[(start + i) % len(order)] for i in range(len(order)-1)]
+        self.state_tracker.record_suggestion(asker_name, suspect, weapon, room, responder_sequence)
+
         # Find who can show
         order = self.turn_order
         start = (order.index(asker_name) + 1) % len(order)
@@ -183,6 +193,8 @@ class GameEngine:
                 # Cannot show — all bots learn this
                 self._notify_no_show(responder_name, asker_name, suspect, weapon, room)
                 self._log(f"   ❌ {responder_name} cannot show any card.", "nope")
+                # record no-show to tracker
+                self.state_tracker.record_no_show(responder_name, asker_name, suspect, weapon, room)
             else:
                 # Can show — handle human/bot differently
                 if responder_name == self.human_name:
@@ -203,10 +215,14 @@ class GameEngine:
                         card = responder.pick_card_to_show(suspect, weapon, room, asker_name)
 
                     self._notify_show(responder_name, asker_name, card, suspect, weapon, room)
+                    # record show in tracker (card may be None for others)
+                    self.state_tracker.record_show(responder_name, asker_name, card if asker_name == self.human_name else None)
                     return {"type": "shown", "shower": responder_name, "asker": asker_name, "card": card if asker_name == self.human_name else None}
 
         # Nobody could show
         self._log(f"   🚨 Nobody could refute the suggestion!", "alert")
+        # record no refute (no one showed)
+        self.state_tracker.record_no_show(None, asker_name, suspect, weapon, room)
         return {"type": "no_refute"}
 
     def human_shows_card(self, card):
@@ -219,6 +235,8 @@ class GameEngine:
         self._notify_show(self.human_name, asker, card, s, w, r)
         self.awaiting_human_show = False
         result = {"type": "shown", "shower": self.human_name, "asker": asker, "card": None}
+        # record the human show (we know the card was shown to asker)
+        self.state_tracker.record_show(self.human_name, asker, card)
         return result
 
     def _notify_no_show(self, passer, asker, suspect, weapon, room):
@@ -245,6 +263,7 @@ class GameEngine:
             else:
                 # Others only know someone showed something
                 player.observe_showed_card_to_other(shower, suspect, weapon, room)
+        # Also inform tracker (already handled when caller had access to card/asker)
 
     # ------------------------------------------------------------------
     # Accusations

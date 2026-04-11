@@ -1,217 +1,157 @@
 """
-Clue Bot Player — uses KnowledgeBase for optimal play.
+Deterministic Clue bot.
+
+Move choice is based on one-step constraint-reduction simulation with fixed
+lexicographic tie-breaking. No probability or randomness is used.
 """
 
-from engine.knowledge_base import KnowledgeBase
-from engine.cards import SUSPECTS, WEAPONS, ROOMS, CARD_TYPE, ROOM_ADJACENCY, SECRET_PASSAGES
+from __future__ import annotations
+
+from engine.cards import SUSPECTS, WEAPONS
+from engine.knowledge_base import ContradictionError, KnowledgeBase
+
+
+class ClueBot:
+    def __init__(self, name, kb):
+        self.name = name
+        self.kb = kb
+
+    def take_turn(self, current_room, responder_order):
+        if self.kb.can_accuse():
+            suspect, weapon, room = self.kb.get_solution()
+            return ("accuse", suspect, weapon, room)
+
+        suspect, weapon, room = self.choose_best_move(current_room, responder_order)
+        return ("suggest", suspect, weapon, room)
+
+    def get_legal_suggestions(self, position):
+        suggestions = [
+            (suspect, weapon, position)
+            for suspect in sorted(SUSPECTS)
+            for weapon in sorted(WEAPONS)
+        ]
+        return suggestions
+
+    def evaluate_move(self, move, responder_order):
+        baseline = self.kb.snapshot_metrics()
+        outcome_scores = []
+
+        for branch in self._enumerate_outcomes(move, responder_order):
+            outcome_scores.append(branch.score_delta(baseline))
+
+        if not outcome_scores:
+            return float("-inf")
+
+        return min(outcome_scores)
+
+    def choose_best_move(self, current_room, responder_order):
+        best_move = None
+        best_score = float("-inf")
+
+        for move in self.get_legal_suggestions(current_room):
+            score = self.evaluate_move(move, responder_order)
+            if score > best_score or (score == best_score and (best_move is None or move < best_move)):
+                best_score = score
+                best_move = move
+
+        return best_move
+
+    def _enumerate_outcomes(self, move, responder_order):
+        suspect, weapon, room = move
+        cards = (suspect, weapon, room)
+        outcomes = []
+
+        for responder_index, responder in enumerate(responder_order):
+            branch = self.kb.clone()
+            try:
+                for previous in responder_order[:responder_index]:
+                    branch.observe_no_show(previous, suspect, weapon, room)
+            except ContradictionError:
+                continue
+
+            candidate_cards = sorted(
+                card for card in cards
+                if branch.has_card[(responder, card)] is not False
+            )
+
+            for card in candidate_cards:
+                shown_branch = branch.clone()
+                try:
+                    shown_branch.observe_showed_card_to_me(responder, card)
+                except ContradictionError:
+                    continue
+                outcomes.append(shown_branch)
+
+        no_refute_branch = self.kb.clone()
+        try:
+            for responder in responder_order:
+                no_refute_branch.observe_no_show(responder, suspect, weapon, room)
+        except ContradictionError:
+            pass
+        else:
+            outcomes.append(no_refute_branch)
+
+        return outcomes
 
 
 class BotPlayer:
-    def __init__(self, name, cards, all_players, num_cards_per_player):
+    def __init__(self, name, cards, all_players, num_cards_per_player, **_ignored):
         self.name = name
         self.cards = list(cards)
+        self.all_players = list(all_players)
+        self.num_cards_per_player = dict(num_cards_per_player)
+
         self.current_room = None
         self.eliminated = False
+        self.is_human = False
 
         self.kb = KnowledgeBase(
-            player_names=all_players,
-            my_name=name,
+            player_names=self.all_players,
+            my_name=self.name,
             my_cards=self.cards,
-            num_cards_per_player=num_cards_per_player,
+            num_cards_per_player=self.num_cards_per_player,
         )
+        self.policy = ClueBot(self.name, self.kb)
 
-    # ------------------------------------------------------------------
-    # Observation callbacks (called by game engine)
-    # ------------------------------------------------------------------
-
-    def observe_no_show(self, player, suspect, weapon, room):
-        """Another player passed — they have none of the three cards."""
-        self.kb.observe_no_show(player, suspect, weapon, room)
-
-    def observe_showed_card_to_other(self, shower, suspect, weapon, room):
-        """
-        `shower` showed a card to another player (not us).
-        We know shower has at least one of suspect/weapon/room.
-        """
-        self.kb.observe_showed_unknown(shower, suspect, weapon, room)
-
-    def observe_showed_card_to_me(self, shower, card):
-        """Another player showed THIS specific card to us."""
-        self.kb.observe_hand(shower, card)
-
-    # ------------------------------------------------------------------
-    # Decision methods
-    # ------------------------------------------------------------------
-
-    def choose_suggestion(self):
-        """
-        Returns (suspect, weapon, room) — the best suggestion to make.
-        Uses KB scoring to maximize expected information gain.
-        """
-        # Build responder order starting with the next player after this bot
-        if self.name in self.kb.player_names:
-            idx = self.kb.player_names.index(self.name)
-            responder_order = self.kb.player_names[idx+1:] + self.kb.player_names[:idx]
-        else:
-            responder_order = list(self.kb.player_names)
-
-        # Allow the bot to consider moving: current room, adjacent rooms, and secret passage.
-        candidates = []
-        cur = self.current_room
-        if cur:
-            candidates.append(cur)
-            # adjacent
-            for nb in ROOM_ADJACENCY.get(cur, []):
-                if nb not in candidates:
-                    candidates.append(nb)
-            # secret passage
-            sp = SECRET_PASSAGES.get(cur)
-            if sp and sp not in candidates:
-                candidates.append(sp)
-        else:
-            # If no current room known, try all rooms
-            candidates = list(ROOMS)
-
-        # Aggressive envelope-driven shortcut: if envelope probabilities point
-        # strongly to particular candidates, suggest them directly to confirm.
-        env_probs = self.kb.get_envelope_probabilities()
-        def top_candidate(lst):
-            best = None
-            best_p = 0.0
-            for c in lst:
-                p = env_probs.get(c, 0.0)
-                if p > best_p:
-                    best_p = p
-                    best = c
-            return best, best_p
-
-        s_top, s_p = top_candidate(SUSPECTS)
-        w_top, w_p = top_candidate(WEAPONS)
-        r_top, r_p = top_candidate(ROOMS)
-
-        # If any candidate is very likely, or average confidence is high, push that triple.
-        if (s_p >= 0.6 or w_p >= 0.6 or r_p >= 0.6) or ((s_p + w_p + r_p) / 3.0) >= 0.45:
-            # Prefer current room if r_top is low confidence
-            chosen_room = r_top if r_p >= 0.4 else (self.current_room or r_top)
-            if chosen_room is None:
-                chosen_room = self.current_room or ROOMS[0]
-            return (s_top or SUSPECTS[0], w_top or WEAPONS[0], chosen_room)
-
-        best_trip = None
-        best_score = float('-inf')
-        for room in candidates:
-            s, w, r, score = self.kb.best_suggestion(available_room=room, responder_order=responder_order)
-            # small movement penalty: prefer staying in place
-            move_penalty = 0.0 if room == cur else 0.2
-            adj_penalty = 0.1 if room in ROOM_ADJACENCY.get(cur, []) else 0.0
-            score_adj = score - (move_penalty + adj_penalty)
-            if score_adj > best_score:
-                best_score = score_adj
-                best_trip = (s, w, r)
-
-        if best_trip:
-            return best_trip
-        # fallback
-        s, w, r, score = self.kb.best_suggestion(available_room=self.current_room, responder_order=responder_order)
-        return s, w, r
-
-    def choose_accusation(self):
-        """
-        Returns (suspect, weapon, room) if we're confident enough to accuse,
-        else None.
-        """
-        sol_s, sol_w, sol_r = self.kb.get_solution()
-        if sol_s and sol_w and sol_r:
-            return sol_s, sol_w, sol_r
-
-        # Partial-solution heuristic: if for each category there is exactly one
-        # high-probability envelope candidate (based on envelope probs), accuse.
-        probs = self.kb.get_envelope_probabilities()
-        # Get top candidate per category
-        def top_candidate(lst):
-            best = None
-            best_p = 0.0
-            for c in lst:
-                p = probs.get(c, 0.0)
-                if p > best_p:
-                    best_p = p
-                    best = c
-            return best, best_p
-
-        s_c, s_p = top_candidate(SUSPECTS)
-        w_c, w_p = top_candidate(WEAPONS)
-        r_c, r_p = top_candidate(ROOMS)
-
-        # Require reasonably high confidence across all three to accuse
-        if s_p >= 0.85 and w_p >= 0.85 and r_p >= 0.85:
-            return s_c, w_c, r_c
-        return None
+    def _responder_order(self):
+        start = (self.all_players.index(self.name) + 1) % len(self.all_players)
+        return [
+            self.all_players[(start + offset) % len(self.all_players)]
+            for offset in range(len(self.all_players) - 1)
+        ]
 
     def should_accuse(self):
-        return self.kb.is_solved()
+        return self.kb.can_accuse()
 
-    def pick_card_to_show(self, suspect, weapon, room, asker_name=None):
-        """
-        When asked to show a card, pick the one that reveals least info.
-        Prefer showing cards that are already known by the asker if possible,
-        otherwise show the one held by the most other players.
-        """
-        can_show = [c for c in (suspect, weapon, room) if c in self.cards]
-        if not can_show:
-            return None
-        # Prefer showing a card that the asker likely already knows (minimize leak).
-        # The GameEngine will call BotPlayer.pick_card_to_show only when some human
-        # or bot asked; we don't have the asker's identity here, so prefer:
-        # 1) card known to many players (common)
-        # 2) card type already solved in KB
-        # 3) card with lowest entropy (few unknowns)
+    def choose_accusation(self):
+        return self.kb.get_solution()
 
-        # Score each candidate; prefer cards asker likely already knows (if asker provided)
-        def card_score(card):
-            score = 0.0
-            # If KB knows some player definitely has it, it's "common" (less new info)
-            owner_known = any(self.kb.has_card.get((p, card)) is True for p in self.kb.player_names)
-            if owner_known:
-                score += 5.0
+    def choose_suggestion(self):
+        responder_order = self._responder_order()
+        return self.policy.choose_best_move(self.current_room, responder_order)
 
-            # If asker already has this card (confirmed), prefer showing it
-            if asker_name is not None:
-                asker_has = self.kb.has_card.get((asker_name, card))
-                if asker_has is True:
-                    score += 10.0
-                elif asker_has is None:
-                    # small boost if asker might have it (unknown)
-                    score += 1.0
+    def pick_card_to_show(self, suspect, weapon, room, asker_name):
+        showable = sorted(card for card in (suspect, weapon, room) if card in self.cards)
+        return showable[0]
 
-            # If type already solved, showing it leaks less
-            sol_s, sol_w, sol_r = self.kb.get_solution()
-            ctype = CARD_TYPE[card]
-            if (ctype == "suspect" and sol_s) or (ctype == "weapon" and sol_w) or (ctype == "room" and sol_r):
-                score += 3.0
+    def observe_no_show(self, player, suspect, weapon, room):
+        self.kb.observe_no_show(player, suspect, weapon, room)
 
-            # Fewer unknown owners => more common
-            none_count = sum(1 for p in self.kb.player_names if self.kb.has_card.get((p, card)) is None)
-            score += (len(self.kb.player_names) - none_count)
+    def observe_showed_card_to_me(self, player, card):
+        self.kb.observe_showed_card_to_me(player, card)
 
-            return score
-
-        best = max(can_show, key=card_score)
-        return best
+    def observe_showed_card_to_other(self, player, suspect, weapon, room):
+        self.kb.observe_showed_card_to_other(player, suspect, weapon, room)
 
     def get_knowledge_summary(self):
-        """Returns a human-readable summary for UI display."""
-        sol_s, sol_w, sol_r = self.kb.get_solution()
-        lines = []
-        if sol_s:
-            lines.append(f"✓ Murderer: {sol_s}")
-        else:
-            lines.append("? Murderer: unknown")
-        if sol_w:
-            lines.append(f"✓ Weapon: {sol_w}")
-        else:
-            lines.append("? Weapon: unknown")
-        if sol_r:
-            lines.append(f"✓ Room: {sol_r}")
-        else:
-            lines.append("? Room: unknown")
-        return "\n".join(lines)
+        metrics = self.kb.snapshot_metrics()
+        suspect, weapon, room = self.kb.get_solution()
+        return {
+            "solved": self.kb.is_solved(),
+            "solution": {
+                "suspect": suspect,
+                "weapon": weapon,
+                "room": room,
+            },
+            "metrics": metrics,
+        }

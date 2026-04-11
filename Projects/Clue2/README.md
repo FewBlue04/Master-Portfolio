@@ -1,4 +1,4 @@
-# Clue — Luxury Noir (Python / Tkinter)
+# Clue — (Python / Tkinter)
 
 Single-player Clue-style game against AI bots: a **constraint-based knowledge engine**, deterministic bot policy, and a **Tkinter** UI (“Luxury Noir” theme).
 

@@ -9,7 +9,6 @@ Depends on KnowledgeBase for deductions and GameStateTracker for history.
 from __future__ import annotations
 
 from collections import deque
-from typing import Dict, List, Optional, Tuple, Union
 
 from .cards import ROOM_ADJACENCY, ROOMS, SECRET_PASSAGES, SUSPECTS, WEAPONS
 from .knowledge_base import ContradictionError, KnowledgeBase
@@ -35,7 +34,7 @@ class ClueBot:
         self.name = name
         self.kb = kb
 
-    def get_reachable_rooms(self, position: Optional[str]) -> List[str]:
+    def get_reachable_rooms(self, position: str | None) -> list[str]:
         """Return sorted list of rooms reachable from current position.
         
         Includes current room, adjacent rooms, and any secret passage destination.
@@ -59,7 +58,7 @@ class ClueBot:
 
         return sorted(reachable)
 
-    def get_legal_suggestions(self, position: str) -> List[Tuple[str, str, str]]:
+    def get_legal_suggestions(self, position: str) -> list[tuple[str, str, str]]:
         """Generate all legal (suspect, weapon, room) tuples from current position.
         
         Args:
@@ -76,7 +75,7 @@ class ClueBot:
         ]
         return suggestions
 
-    def evaluate_move(self, move: Tuple[str, str, str], responder_order: List[str]) -> float:
+    def evaluate_move(self, move: tuple[str, str, str], responder_order: list[str]) -> float:
         """Score a move by worst-case constraint reduction across all response outcomes.
         
         Uses minimax reasoning: assumes opponents will respond in the way that

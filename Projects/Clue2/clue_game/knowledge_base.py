@@ -9,7 +9,6 @@ to logical closure before returning to callers. Used by BotPlayer for deductions
 from __future__ import annotations
 
 from copy import deepcopy
-from typing import Dict, List, Optional, Set, Tuple, Union
 
 from .cards import ALL_CARDS, ROOMS, SUSPECTS, WEAPONS
 
@@ -44,7 +43,7 @@ class KnowledgeBase:
         clauses: List of (entity, frozenset(cards)) for "at least one" constraints
     """
 
-    def __init__(self, player_names: List[str], my_name: str, my_cards: List[str], num_cards_per_player: Dict[str, int]) -> None:
+    def __init__(self, player_names: list[str], my_name: str, my_cards: list[str], num_cards_per_player: dict[str, int]) -> None:
         self.player_names = list(player_names)
         self.my_name = my_name
         self.num_cards_per_player = dict(num_cards_per_player)
@@ -69,7 +68,7 @@ class KnowledgeBase:
 
         self.propagate()
 
-    def clone(self) -> "KnowledgeBase":
+    def clone(self) -> KnowledgeBase:
         return deepcopy(self)
 
     def add_constraint(self, entity: str, card: str, value: bool) -> None:
@@ -114,7 +113,7 @@ class KnowledgeBase:
         """Record that a player showed a card to someone else (unknown to us)."""
         self.observe_showed_unknown(player, suspect, weapon, room)
 
-    def get_possible_owners(self, card: str) -> Set[str]:
+    def get_possible_owners(self, card: str) -> set[str]:
         """Return set of entities that could possibly have this card.
         
         Args:
@@ -138,7 +137,7 @@ class KnowledgeBase:
             card for card in CATEGORIES[category] if self.has_card[(ENVELOPE, card)] is not False
         }
 
-    def get_solution(self) -> Tuple[Optional[str], Optional[str], Optional[str]]:
+    def get_solution(self) -> tuple[str | None, str | None, str | None]:
         """Return the deduced solution if known.
         
         Returns:

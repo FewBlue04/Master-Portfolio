@@ -8,8 +8,6 @@ and coordinates with BotPlayer instances for AI moves.
 
 from __future__ import annotations
 
-from typing import Dict, List, Optional, Tuple, Union
-
 import random
 
 from .bot import BotPlayer
@@ -32,7 +30,7 @@ class Player:
         is_human: Always True for Player instances
     """
 
-    def __init__(self, name: str, cards: List[str]) -> None:
+    def __init__(self, name: str, cards: list[str]) -> None:
         self.name = name
         self.cards = list(cards)
         self.current_room = random.choice(ROOMS)
@@ -155,7 +153,7 @@ class GameEngine:
     # Turn management
     # ------------------------------------------------------------------
 
-    def get_current_player(self) -> Union[Player, BotPlayer]:
+    def get_current_player(self) -> Player | BotPlayer:
         """Return the Player/BotPlayer instance whose turn it is."""
         return self.players[self.current_player_name]
 

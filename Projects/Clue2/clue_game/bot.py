@@ -16,15 +16,15 @@ from .knowledge_base import ContradictionError, KnowledgeBase
 
 class ClueBot:
     """Deterministic bot with one-step lookahead policy based on constraint reduction.
-    
+
     Evaluates legal suggestions by simulating all possible response outcomes and
     scoring them by the reduction in knowledge uncertainty. Uses fixed lexicographic
     tie-breaking and incorporates information pressure and repeat penalties.
-    
+
     Args:
         name: Bot display name
         kb: KnowledgeBase instance for deductions
-        
+
     Attributes:
         name: Bot display name
         kb: KnowledgeBase for tracking card knowledge
@@ -36,13 +36,13 @@ class ClueBot:
 
     def get_reachable_rooms(self, position: str | None) -> list[str]:
         """Return sorted list of rooms reachable from current position.
-        
+
         Includes current room, adjacent rooms, and any secret passage destination.
         If position is invalid, returns all rooms (teleport for debugging).
-        
+
         Args:
             position: Current room name or None
-            
+
         Returns:
             Sorted list of reachable room names
         """
@@ -60,10 +60,10 @@ class ClueBot:
 
     def get_legal_suggestions(self, position: str) -> list[tuple[str, str, str]]:
         """Generate all legal (suspect, weapon, room) tuples from current position.
-        
+
         Args:
             position: Current room name
-            
+
         Returns:
             List of (suspect, weapon, room) tuples in lexicographic order
         """
@@ -77,14 +77,14 @@ class ClueBot:
 
     def evaluate_move(self, move: tuple[str, str, str], responder_order: list[str]) -> float:
         """Score a move by worst-case constraint reduction across all response outcomes.
-        
+
         Uses minimax reasoning: assumes opponents will respond in the way that
         minimizes knowledge gain. Returns negative infinity if no valid responses.
-        
+
         Args:
             move: (suspect, weapon, room) tuple to evaluate
             responder_order: List of player names in response order
-            
+
         Returns:
             Worst-case score (lower = better, negative infinity = invalid)
         """

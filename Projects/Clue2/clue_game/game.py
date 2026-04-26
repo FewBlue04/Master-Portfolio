@@ -17,11 +17,11 @@ from .state_tracker import GameStateTracker
 
 class Player:
     """Human player model with cards and position.
-    
+
     Args:
         name: Player display name
         cards: List of cards dealt to this player
-        
+
     Attributes:
         name: Player display name
         cards: List of cards held by player
@@ -40,15 +40,15 @@ class Player:
 
 class GameEngine:
     """Clue rules engine: dealing, turns, suggestions, accusations, and UI-facing event log.
-    
+
     Manages complete game state including players, turn order, solution cards,
     and maintains an event log for UI consumption. Coordinates with BotPlayer
     instances for AI decisions and enforces all Clue rules.
-    
+
     Args:
         human_name: Name for human player (default: "You")
         num_bots: Number of AI opponents (1-5, default: 3)
-        
+
     Attributes:
         player_names: List of all player names in turn order
         players: Dict mapping player names to Player/BotPlayer instances
@@ -163,7 +163,7 @@ class GameEngine:
 
     def advance_turn(self):
         """Move to the next non-eliminated player.
-        
+
         Updates current_turn_index and current_player_name to point to the next
         player in turn order who hasn't been eliminated by a false accusation.
         """

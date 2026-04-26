@@ -26,24 +26,30 @@ class ContradictionError(Exception):
 
 class KnowledgeBase:
     """Constraint store for one player with logical propagation to fixed point.
-    
+
     Maintains a boolean matrix of (entity, card) assignments where True means
     the entity has the card, False means they don't, and None means unknown.
     Propagates all constraints to logical closure before returning to callers.
-    
+
     Args:
         player_names: List of all player names
         my_name: This bot's player name
         my_cards: List of cards dealt to this bot
         num_cards_per_player: Dict mapping player names to card counts
-        
+
     Attributes:
         entities: List of player names plus ENVELOPE
         has_card: Dict mapping (entity, card) -> True/False/None
         clauses: List of (entity, frozenset(cards)) for "at least one" constraints
     """
 
-    def __init__(self, player_names: list[str], my_name: str, my_cards: list[str], num_cards_per_player: dict[str, int]) -> None:
+    def __init__(
+        self,
+        player_names: list[str],
+        my_name: str,
+        my_cards: list[str],
+        num_cards_per_player: dict[str, int],
+    ) -> None:
         self.player_names = list(player_names)
         self.my_name = my_name
         self.num_cards_per_player = dict(num_cards_per_player)
@@ -73,7 +79,7 @@ class KnowledgeBase:
 
     def add_constraint(self, entity: str, card: str, value: bool) -> None:
         """Add a constraint and propagate to logical closure.
-        
+
         Args:
             entity: Player name or ENVELOPE
             card: Card name
@@ -92,7 +98,7 @@ class KnowledgeBase:
 
     def observe_no_show(self, player, suspect, weapon, room):
         """Record that a player couldn't show any of the three suggested cards.
-        
+
         Args:
             player: Player who couldn't show
             suspect, weapon, room: The three suggested cards
@@ -103,7 +109,7 @@ class KnowledgeBase:
 
     def observe_showed_unknown(self, player, suspect, weapon, room):
         """Record that a player showed one of the three cards, but we don't know which.
-        
+
         Creates an "at least one" clause for logical propagation.
         """
         self.clauses.append((player, frozenset((suspect, weapon, room))))
@@ -115,10 +121,10 @@ class KnowledgeBase:
 
     def get_possible_owners(self, card: str) -> set[str]:
         """Return set of entities that could possibly have this card.
-        
+
         Args:
             card: Card name to query
-            
+
         Returns:
             Set of entity names (players or ENVELOPE) where has_card is not False
         """
@@ -126,10 +132,10 @@ class KnowledgeBase:
 
     def get_envelope_candidates(self, category):
         """Return cards in a category that could still be in the envelope.
-        
+
         Args:
             category: One of 'suspect', 'weapon', 'room'
-            
+
         Returns:
             Set of card names that could be in the envelope
         """
@@ -139,7 +145,7 @@ class KnowledgeBase:
 
     def get_solution(self) -> tuple[str | None, str | None, str | None]:
         """Return the deduced solution if known.
-        
+
         Returns:
             Tuple of (suspect, weapon, room) where each element is a card name
             or None if not yet determined
@@ -180,7 +186,7 @@ class KnowledgeBase:
 
     def score_delta(self, before_metrics):
         """Calculate knowledge improvement score (higher = more information gained).
-        
+
         Positive score indicates reduction in uncertainty through:
         - Fewer possible owners for cards
         - More confirmed card assignments
@@ -219,7 +225,7 @@ class KnowledgeBase:
 
     def propagate(self):
         """Apply all inference rules to logical closure.
-        
+
         Iteratively applies constraint propagation rules until no new deductions
         can be made. Each rule returns True if it made changes, causing another
         iteration of the propagation loop.
